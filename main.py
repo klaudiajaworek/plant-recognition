@@ -24,6 +24,22 @@ def get_plant_info(idx):
     df = pd.read_csv("data/plant_info.csv")
     return df[df["id"] == idx].iloc[0].to_dict()
 
+def load_plant_info():
+    df = pd.read_csv("data/plant_info.csv")
+    return df
+
+plant_df = load_plant_info()
+
+# Utility functions
+
+def get_plant_info_by_id(idx):
+    return plant_df[plant_df["id"] == idx].iloc[0].to_dict()
+
+
+def get_plant_info_by_latin(name):
+    row = plant_df[plant_df["latin_name"] == name].iloc[0]
+    return row.to_dict()
+
 
 def safe(val):
     return "No data" if pd.isna(val) or val == "" else val
@@ -59,10 +75,8 @@ def predict(img):
     plant_info = get_plant_info(int(plant_idx))
     return plant_info
 
-st.set_page_config(
-    page_title="Plant Recognition",
-    page_icon="🌱"
-)
+st.set_page_config(page_title="Plant Explorer", page_icon="🌱")
+
 
 st.markdown(
     """
@@ -153,82 +167,72 @@ st.markdown(
 
 
 
-
-# Title
-st.title("Plant Recognition App")
-st.write("Upload a plant image to get a prediction.")
-
-# File uploader
-uploaded_file = st.file_uploader("Choose a plant image... 🌱", type=["jpg", "jpeg", "png"])
-
-if uploaded_file is not None:
-    # Display the uploaded image
-    image = Image.open(uploaded_file)
-    st.image(image, caption="Uploaded Image", use_container_width=True)
-
-    # Predict
-    with st.spinner("Identifying plant... 🌿"):
-        result = predict(image)
-
-
-    # Show results
-    st.subheader("Prediction Result")
+def display_plant_details(result: dict):
+    st.subheader("Prediction Result" if mode == "Predict" else "Species Details")
     st.markdown(f"**Latin Name:** {result['latin_name']}")
-    names = [n.strip().title() for n in result["english_names"].split(";") if n.strip()]
-    unique = list(dict.fromkeys(names)) 
-    pretty = ", ".join(unique)
+    # Robust handling of English names
+    raw_eng = result.get("english_names", "")
+    if not isinstance(raw_eng, str):
+        raw_eng = ""
+    names = [n.strip().title() for n in raw_eng.split(";") if n.strip()]
+    eng_str = ", ".join(names) if names else ""
+    st.markdown(f"**English Name(s):** {safe(eng_str)}")
+    st.markdown(f"**Polish Name:** {safe(result.get('polish_names'))}")
+    st.markdown(f"**Description:** {safe(result.get('description'))}")
+    st.markdown(f"**Wikipedia link:** {safe(result.get('wiki_link'))}")
 
-    st.markdown(f"**English Name(s):** {safe(pretty)}")
-    st.markdown(f"**Polish Name:** {safe(result['polish_names'])}")
-    st.markdown(f"**Description:** {safe(result['description'])}")
-    st.markdown(f"**Wikipedia link:** {safe(result['wiki_link'])}")
 
     # Example photos
-    st.subheader("Example photos")
-    organs = ["leaf", "flower", "fruit"]
+    st.subheader("Example Photos")
     cols = st.columns(3)
-    base_dir = os.path.join("species_organs", str(result["id"]))
-
-    for organ, col in zip(organs, cols):
+    base = os.path.join(species_dir, str(result['id']))
+    for organ, col in zip(["leaf", "flower", "fruit"], cols):
         with col:
-            # look for any file that has the organ name anywhere in it (jpg/jpeg/png)
-            pattern = os.path.join(base_dir, f"*{organ}*.[jJ][pP][gG]")
-            files = glob.glob(pattern)
-            if not files:
-                # fallback to png if no jpg found
-                pattern = os.path.join(base_dir, f"*{organ}*.[pP][nN][gG]")
-                files = glob.glob(pattern)
-
+            patterns = [f"*{organ}*.[jJ][pP][gG]", f"*{organ}*.[pP][nN][gG]"]
+            files = []
+            for pat in patterns:
+                files = glob.glob(os.path.join(base, pat))
+                if files: break
             if files:
-                img_path = files[0]           # just take the first match
-                img = Image.open(img_path)
+                img = Image.open(files[0])
                 st.image(img, caption=organ.title(), use_container_width=True)
             else:
-                # placeholder box
-                st.empty()
-                st.caption(f"No {organ.title()} Image")
+                st.write(f"No {organ.title()} Image")
 
-    # Display map
+    # Distribution map
     st.subheader("Geographic Distribution")
-
-    coords = [
-    tuple(map(float, s.split('|')))
-    for s in result['lat_lon_coords'].split(';') if s
-    ]
-    
-    plant_map = folium.Map(location=[20, 0], zoom_start=2, tiles="CartoDB positron")
-
-    cluster = MarkerCluster().add_to(plant_map)
-
+    coords = [tuple(map(float, s.split('|'))) for s in result.get('lat_lon_coords','').split(';') if s]
+    m = folium.Map(location=[20, 0], zoom_start=2, tiles="CartoDB positron")
+    cluster = MarkerCluster().add_to(m)
     for lat, lon in coords:
         folium.CircleMarker(
-            location=[lat, lon],
-            radius=4,
-            fill=True,
-            fill_opacity=0.7,
-            color='green',
-            fill_color='green',
-            weight=0
+            location=[lat, lon], radius=4, fill=True,
+            fill_opacity=0.7, color='green', fill_color='green', weight=0
         ).add_to(cluster)
+    st_folium(m, width="100%", height=300)
 
-    st_folium(plant_map, width="100%", height=300)
+# Page Config & Styles
+# Sidebar navigation
+mode = st.sidebar.radio("Choose mode:", ["Predict", "Explore Species"]
+)
+
+if mode == "Predict":
+    st.title("Plant Recognition App 🚀")
+    st.write("Upload a plant image to get a prediction.")
+    file = st.file_uploader("Choose an image...", type=["jpg","jpeg","png"])
+    if file:
+        img = Image.open(file)
+        st.image(img, caption="Uploaded Image", use_container_width=True)
+        with st.spinner("Identifying plant..."):
+            res = predict(img)
+        display_plant_details(res)
+
+else:
+    st.title("Explore Species 🌿")
+    # Alphabetical list of Latin names
+    latin_list = sorted(plant_df['latin_name'].tolist())
+    choice = st.selectbox("Select a species by Latin name:", latin_list)
+    if choice:
+        info = get_plant_info_by_latin(choice)
+        display_plant_details(info)
+
