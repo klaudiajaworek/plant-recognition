@@ -276,12 +276,18 @@ else:
 
     # Map selection flow
     if st.session_state.show_map:
-        st.subheader("Select a Country on Map 🌍")
+        st.subheader("Select a Country on Map")
+        st.markdown("Double-click to select, then click the **Accept** button.")
         fmap = folium.Map(location=[20, 0], zoom_start=2, tiles='cartodbpositron')
         folium.GeoJson(
             world_geojson,
             name='countries',
             tooltip=folium.GeoJsonTooltip(fields=['name'], aliases=['Country:']),
+            highlight_function=lambda feat: {
+                "fillColor": "#ffaa00",
+                "weight": 1.5,
+                "fillOpacity": 0.5,
+            },
             style_function=lambda feat: {
                 'fillColor': 'lime' if feat['properties']['name']==st.session_state.temp_country else 'transparent',
                 'color': '#444','weight':0.5
@@ -297,7 +303,7 @@ else:
                     st.session_state.temp_country = feat['properties'].get('name')
         if st.session_state.temp_country:
             st.success(f"You have selected {st.session_state.temp_country}")
-            if st.button("Accept and Return to Explorer"):
+            if st.button("Accept and return to explorer"):
                 st.session_state.country_choice = st.session_state.temp_country
                 st.session_state.temp_country = None
                 st.session_state.show_map = False
@@ -305,6 +311,14 @@ else:
                     st.rerun()
                 except AttributeError:
                     st.experimental_rerun()
+                
+        if st.button("Back to explorer without selecting"):
+            st.session_state.temp_country = None
+            st.session_state.show_map = False
+            try:
+                st.rerun()
+            except AttributeError:
+                st.experimental_rerun()
 
         st.stop()
 
@@ -314,10 +328,14 @@ else:
         set(n.strip() for names in plant_df['country_names'].str.split(';') for n in (names or []) if n)
     )
     dropdown = ['All countries'] + all_countries
-    country = st.selectbox(
-        "Select a country:", dropdown,
-        index=dropdown.index(st.session_state.country_choice)
-    )
+    try:
+        initial_index = dropdown.index(st.session_state.country_choice)
+    except ValueError:
+        st.warning(f"'{st.session_state.country_choice}' is not available in dataset. Please select another country.")
+        st.session_state.country_choice = 'All countries'
+        initial_index = 0
+
+    country = st.selectbox("Select a country:", dropdown, index=initial_index)
     st.session_state.country_choice = country
 
     # Button under dropdown
