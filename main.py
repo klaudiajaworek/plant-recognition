@@ -12,23 +12,39 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import glob
+import requests
+import geopandas as gpd
+from shapely.geometry import Point, shape
 from PIL import Image
 
 species_dir = "species_organs"
-NUM_CLASSES = 65#len(pd.read_csv("data/plant_info.csv"))
+NUM_CLASSES = 65 #len(pd.read_csv("data/plant_info.csv"))
 with open("data/label_mapping.json", "r") as f:
     LABEL_MAPPING = json.load(f)
+
+
+st.set_page_config(page_title="Plant Explorer", page_icon="🌱")
 
 
 def get_plant_info(idx):
     df = pd.read_csv("data/plant_info.csv")
     return df[df["id"] == idx].iloc[0].to_dict()
 
+@st.cache_data
 def load_plant_info():
     df = pd.read_csv("data/plant_info.csv")
     return df
 
+@st.cache_data
+def load_world_geojson():
+    # Fetch GeoJSON world boundaries
+    url = (
+        "https://raw.githubusercontent.com/python-visualization/folium/master/examples/data/world-countries.json"
+    )
+    return requests.get(url).json()
+
 plant_df = load_plant_info()
+world_geojson = load_world_geojson()
 
 # Utility functions
 
@@ -74,9 +90,6 @@ def predict(img):
     plant_idx = LABEL_MAPPING[str(predicted_class)]
     plant_info = get_plant_info(int(plant_idx))
     return plant_info
-
-st.set_page_config(page_title="Plant Explorer", page_icon="🌱")
-
 
 st.markdown(
     """
@@ -253,10 +266,74 @@ if mode == "Predict":
 
 else:
     st.title("Explore Species 🌿")
-    # Alphabetical list of Latin names
-    latin_list = sorted(plant_df['latin_name'].tolist())
+    # session state init
+    if 'show_map' not in st.session_state:
+        st.session_state.show_map = False
+    if 'country_choice' not in st.session_state:
+        st.session_state.country_choice = 'All countries'
+    if 'temp_country' not in st.session_state:
+        st.session_state.temp_country = None
+
+    # Map selection flow
+    if st.session_state.show_map:
+        st.subheader("Select a Country on Map 🌍")
+        fmap = folium.Map(location=[20, 0], zoom_start=2, tiles='cartodbpositron')
+        folium.GeoJson(
+            world_geojson,
+            name='countries',
+            tooltip=folium.GeoJsonTooltip(fields=['name'], aliases=['Country:']),
+            style_function=lambda feat: {
+                'fillColor': 'lime' if feat['properties']['name']==st.session_state.temp_country else 'transparent',
+                'color': '#444','weight':0.5
+            }
+        ).add_to(fmap)
+        clicked = st_folium(fmap, width="100%", height=500)
+        latlng = clicked.get('last_clicked')
+        if latlng:
+            pt = Point(latlng['lng'], latlng['lat'])
+            for feat in world_geojson.get('features', []):
+                geom = shape(feat.get('geometry', {}))
+                if geom.contains(pt):
+                    st.session_state.temp_country = feat['properties'].get('name')
+        if st.session_state.temp_country:
+            st.success(f"You have selected {st.session_state.temp_country}")
+            if st.button("Accept and Return to Explorer"):
+                st.session_state.country_choice = st.session_state.temp_country
+                st.session_state.temp_country = None
+                st.session_state.show_map = False
+                try:
+                    st.rerun()
+                except AttributeError:
+                    st.experimental_rerun()
+
+        st.stop()
+
+    # Dropdown list
+    plant_df['country_names'] = plant_df['country_names'].fillna('')
+    all_countries = sorted(
+        set(n.strip() for names in plant_df['country_names'].str.split(';') for n in (names or []) if n)
+    )
+    dropdown = ['All countries'] + all_countries
+    country = st.selectbox(
+        "Select a country:", dropdown,
+        index=dropdown.index(st.session_state.country_choice)
+    )
+    st.session_state.country_choice = country
+
+    # Button under dropdown
+    if st.button("Select Country on Map"):
+        st.session_state.show_map = True
+        # use whichever rerun works for your Streamlit version:
+        try:
+            st.rerun()
+        except AttributeError:
+            st.experimental_rerun()
+
+    # Filter & list species
+    mask = plant_df['country_names'].str.contains(rf"\b{st.session_state.country_choice}\b", na=False) if st.session_state.country_choice!='All countries' else slice(None)
+    filtered = plant_df[mask] if st.session_state.country_choice!='All countries' else plant_df
+    latin_list = sorted(filtered['latin_name'])
     choice = st.selectbox("Select a species by Latin name:", latin_list)
     if choice:
-        info = get_plant_info_by_latin(choice)
+        info = filtered[filtered['latin_name']==choice].iloc[0].to_dict()
         display_plant_details(info)
-
