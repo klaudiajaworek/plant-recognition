@@ -7,7 +7,7 @@ import streamlit as st
 import torchvision.transforms as transforms
 from PIL import Image
 from streamlit_folium import st_folium
-from folium.plugins import MarkerCluster
+from folium.plugins import HeatMap
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -105,7 +105,7 @@ st.markdown(
     .stApp, 
     .stApp * {
       color: 
-#d3f2d6
+#e6f7e7
  !important;
     }
     ::placeholder {
@@ -199,17 +199,41 @@ def display_plant_details(result: dict):
             else:
                 st.write(f"No {organ.title()} Image")
 
-    # Distribution map
+    # Species distribution heatmap
     st.subheader("Geographic Distribution")
-    coords = [tuple(map(float, s.split('|'))) for s in result.get('lat_lon_coords','').split(';') if s]
-    m = folium.Map(location=[20, 0], zoom_start=2, tiles="CartoDB positron")
-    cluster = MarkerCluster().add_to(m)
-    for lat, lon in coords:
-        folium.CircleMarker(
-            location=[lat, lon], radius=4, fill=True,
-            fill_opacity=0.7, color='green', fill_color='green', weight=0
-        ).add_to(cluster)
-    st_folium(m, width="100%", height=300)
+
+    raw_coords = result.get('lat_lon_coords', '')
+    coords = [tuple(map(float, s.split('|'))) for s in raw_coords.split(';') if s]
+
+    obs_count = len(coords)
+    st.markdown(f"**Species observations ({obs_count} observations)**")
+    # Satellite basemap
+    m = folium.Map(
+        location=[20, 0],
+        zoom_start=2,
+        tiles='Esri.WorldImagery',
+        attr='Esri'
+    )
+    # Heatmap overlay
+    if coords:
+        HeatMap(
+            coords,
+            radius=10,             # make each point a bit bigger
+            blur=10,               # soften edges
+            min_opacity=0.5,       # show even low-density areas
+            max_zoom=6,
+            gradient={
+                0.0: 'blue',       # background/no data
+                0.2: 'lime',       # low density
+                0.4: 'yellow',     # medium density
+                0.6: 'orange',     # moderately high
+                0.9: 'red',        # high density
+                1.0: 'darkred'     # peak density
+            }
+        ).add_to(m)
+    # Layer control
+    folium.LayerControl().add_to(m)
+    st_folium(m, width="100%", height=400)
 
 # Page Config & Styles
 # Sidebar navigation
@@ -219,7 +243,7 @@ mode = st.sidebar.radio("Choose mode:", ["Predict", "Explore Species"]
 if mode == "Predict":
     st.title("Plant Recognition App 🚀")
     st.write("Upload a plant image to get a prediction.")
-    file = st.file_uploader("Choose an image...", type=["jpg","jpeg","png"])
+    file = st.file_uploader("Choose an image... 🌱", type=["jpg","jpeg","png"])
     if file:
         img = Image.open(file)
         st.image(img, caption="Uploaded Image", use_container_width=True)
