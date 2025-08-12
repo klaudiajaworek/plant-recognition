@@ -17,7 +17,7 @@ import geopandas as gpd
 from shapely.geometry import Point, shape
 from PIL import Image
 
-species_dir = "species_organs"
+species_dir = "data/species_organs"
 NUM_CLASSES = 65 #len(pd.read_csv("data/plant_info.csv"))
 with open("models/label_mapping.json", "r") as f:
     LABEL_MAPPING = json.load(f)
