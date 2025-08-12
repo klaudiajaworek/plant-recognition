@@ -31,7 +31,7 @@ Plant Explorer allows users to:
 
 Upload an image and see the prediction with species info and images.
 
-![Upload and Predict](docs/screenshots/upload_predict.png)
+![Upload](docs/screenshots/upload.png)
 
 ---
 
@@ -48,7 +48,3 @@ Detailed plant info including description, photos, and geographic heatmap.
 Filter species by country or select a country on the interactive map.
 
 ![Country Filter](docs/screenshots/country_filter.png)
-
-python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
-pip install -r requirements.txt
