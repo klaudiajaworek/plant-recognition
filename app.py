@@ -27,17 +27,39 @@ st.set_page_config(page_title="Plant Explorer", page_icon="🌱")
 
 
 def get_plant_info(idx):
+    """
+    Retrieve plant information from the CSV file by plant ID.
+    
+    Args:
+        idx (int): The unique ID of the plant.
+        
+    Returns:
+        dict: A dictionary containing plant details corresponding to the given ID.
+    """
     df = pd.read_csv("data/plant_info.csv")
     return df[df["id"] == idx].iloc[0].to_dict()
 
 @st.cache_data
 def load_plant_info():
+    """
+    Load the entire plant information dataset from CSV into a pandas DataFrame.
+    Uses Streamlit cache to avoid reloading on every app interaction.
+    
+    Returns:
+        pd.DataFrame: DataFrame containing all plant info.
+    """
     df = pd.read_csv("data/plant_info.csv")
     return df
 
 @st.cache_data
 def load_world_geojson():
-    # Fetch GeoJSON world boundaries
+    """
+    Fetch and load the GeoJSON data representing world countries boundaries.
+    Uses Streamlit cache to store the data for faster reloads.
+    
+    Returns:
+        dict: GeoJSON data loaded from a remote URL.
+    """
     url = (
         "https://raw.githubusercontent.com/python-visualization/folium/master/examples/data/world-countries.json"
     )
@@ -49,20 +71,56 @@ world_geojson = load_world_geojson()
 # Utility functions
 
 def get_plant_info_by_id(idx):
+    """
+    Retrieve plant information from the cached DataFrame by plant ID.
+    
+    Args:
+        idx (int): Plant ID.
+    
+    Returns:
+        dict: Plant information as a dictionary.
+    """
     return plant_df[plant_df["id"] == idx].iloc[0].to_dict()
 
 
 def get_plant_info_by_latin(name):
+    """
+    Retrieve plant information by Latin name.
+    
+    Args:
+        name (str): Latin name of the plant.
+        
+    Returns:
+        dict: Plant information as a dictionary.
+    """
     row = plant_df[plant_df["latin_name"] == name].iloc[0]
     return row.to_dict()
 
 
 def safe(val):
+    """
+    Return a safe string for display, replacing missing or empty values with "No data".
+    
+    Args:
+        val: Value to check.
+    
+    Returns:
+        str: Original value if valid, otherwise "No data".
+    """
     return "No data" if pd.isna(val) or val == "" else val
 
 
 
 def create_efficientnet_b0(num_classes):
+    """
+    Create an EfficientNet-B0 model pre-trained on ImageNet, adjusted for the given number of classes.
+    
+    Args:
+        num_classes (int): Number of output classes for classification.
+        
+    Returns:
+        torch.nn.Module: The EfficientNet-B0 model instance.
+    """
     model = timm.create_model(
         "efficientnet_b0", pretrained=True, num_classes=num_classes
     )
@@ -79,6 +137,20 @@ test_transform = transforms.Compose(
 
 
 def predict(img):
+    """
+    Predict the plant species from an input image.
+    - Applies transformations to the image.
+    - Loads the pre-trained model weights.
+    - Runs the model inference.
+    - Maps the predicted class to plant ID.
+    - Fetches plant information.
+    
+    Args:
+        img (PIL.Image): Input plant image.
+    
+    Returns:
+        dict: Predicted plant species information.
+    """
     img_trans = test_transform(img.convert("RGB")).unsqueeze(0)
     model_eff = create_efficientnet_b0(NUM_CLASSES)
     model_eff.load_state_dict(
@@ -181,6 +253,14 @@ st.markdown(
 
 
 def display_plant_details(result: dict):
+    """
+    Display detailed information about a plant species on the Streamlit app.
+    Shows Latin name, English names, Polish name, description, Wikipedia link, example photos,
+    and a geographic distribution heatmap using Folium.
+    
+    Args:
+        result (dict): Dictionary containing plant information.
+    """
     st.subheader("Prediction Result" if mode == "Predict" else "Species Details")
     st.markdown(f"**Latin Name:** {result['latin_name']}")
     # Robust handling of English names
