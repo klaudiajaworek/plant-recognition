@@ -19,7 +19,7 @@ from PIL import Image
 
 species_dir = "species_organs"
 NUM_CLASSES = 65 #len(pd.read_csv("data/plant_info.csv"))
-with open("data/label_mapping.json", "r") as f:
+with open("models/label_mapping.json", "r") as f:
     LABEL_MAPPING = json.load(f)
 
 
@@ -82,7 +82,7 @@ def predict(img):
     img_trans = test_transform(img.convert("RGB")).unsqueeze(0)
     model_eff = create_efficientnet_b0(NUM_CLASSES)
     model_eff.load_state_dict(
-        torch.load("data/efficientnet_b0_plants.pth", map_location=torch.device("cpu"))
+        torch.load("models/efficientnet_b0_plants.pth", map_location=torch.device("cpu"))
     )
     model_eff.eval()
     outputs = model_eff(img_trans)
@@ -192,7 +192,10 @@ def display_plant_details(result: dict):
     st.markdown(f"**English Name(s):** {safe(eng_str)}")
     st.markdown(f"**Polish Name:** {safe(result.get('polish_names'))}")
     st.markdown(f"**Description:** {safe(result.get('description'))}")
-    st.markdown(f"**Wikipedia link:** {safe(result.get('wiki_link'))}")
+    if result['latin_name']=='Lapsana communis':
+        st.markdown("**Wikipedia link:** https://en.wikipedia.org/wiki/Lapsana_communis")
+    else:
+        st.markdown(f"**Wikipedia link:** {safe(result.get('wiki_link'))}")
 
 
     # Example photos
